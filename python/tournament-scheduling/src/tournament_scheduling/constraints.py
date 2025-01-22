@@ -1,6 +1,8 @@
 from timefold.solver.score import *
 from datetime import time
+from dataclasses import dataclass
 from typing import Final
+from decimal import Decimal
 
 from .domain import *
 
@@ -39,11 +41,17 @@ def unavailability_penalty(constraint_factory: ConstraintFactory) -> Constraint:
             .as_constraint("unavailabilityPenalty"))
 
 
+@dataclass
+class LoadBalanceJustification(ConstraintJustification):
+    unfairness: Decimal
+
+
 def fair_assignment_count_per_team(constraint_factory: ConstraintFactory) -> Constraint:
     return (constraint_factory
             .for_each(TeamAssignment)
             .group_by(ConstraintCollectors.load_balance(lambda team_assignment: team_assignment.team))
             .penalize_decimal(HardMediumSoftDecimalScore.ONE_MEDIUM, lambda balance: balance.unfairness())
+            .justify_with(lambda balance, score: LoadBalanceJustification(balance.unfairness()))
             .as_constraint("fairAssignmentCountPerTeam"))
 
 
@@ -55,4 +63,5 @@ def evenly_confrontation_count(constraint_factory: ConstraintFactory) -> Constra
                           Joiners.less_than(lambda assignment: assignment.team.id))
             .group_by(ConstraintCollectors.load_balance(lambda assignment, other_assignment: (assignment.team, other_assignment.team)))
             .penalize_decimal(HardMediumSoftDecimalScore.ONE_SOFT, lambda balance: balance.unfairness())
+            .justify_with(lambda balance, score: LoadBalanceJustification(balance.unfairness()))
             .as_constraint("evenlyConfrontationCount"))
